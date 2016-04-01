@@ -1,0 +1,79 @@
+#!/usr/bin/env expect
+#
+# 2016-04-01 -- jontow@mototowne.com
+#
+# Script to power on/off a Sun Microsystems machine using the
+# "Sun(TM) Embedded Lights Out Manager", tested with version 1.60 firmware only.
+#
+
+if {[llength $argv] < 3} {
+	puts "Syntax: powerctrl.exp <user@host> <password> <on|off> \[verbose\]"
+	exit -1
+}
+
+set hostname [lindex $argv 0]
+set password [lindex $argv 1]
+
+switch -- [lindex $argv 2] \
+    "on" {
+	set action "on"
+  } "off" {
+	set action "off"
+  } default {
+	puts "[lindex $argv 2] is not a valid action."
+	exit 1
+  }
+
+if {[lindex $argv 3] == "verbose"} {
+	set verbose 1
+	log_user 1
+} else {
+	set verbose 0
+	log_user 0
+}
+
+spawn ssh $hostname
+set timeout 10
+
+expect "assword:" { send "$password\r" } timeout { puts "connection failed"; exit 1 }
+
+# Navigate in hierarchy to CtrlInfo
+expect -re "-> " {
+	if {$verbose} { puts "DEBUG: got prompt, navigating to CtrlInfo" }
+	send "cd /SP/SystemInfo/CtrlInfo\r"
+} timeout {
+	puts "ERROR: Reading prompt failed"
+	exit 1
+}
+
+expect -re "-> " {
+	if {$verbose} { puts "DEBUG: got prompt, setting PowerCtrl state" }
+	send "set PowerCtrl=$action\r"
+} timeout {
+	puts "ERROR: Reading prompt failed"
+	exit 1
+}
+
+# If we're in verbose mode, show CtrlInfo target properties
+if {$verbose} {
+	expect -re "-> " {
+		puts "DEBUG: showing CtrlInfo target properties"
+		send "show\r"
+	} timeout {
+		puts "ERROR: Reading prompt failed"
+		exit 1
+	}
+}
+
+expect -re "-> " {
+	if {$verbose} { puts "DEBUG: got prompt, finished." }
+	send "exit\r"
+	sleep 1
+	exit 0
+} timeout {
+	puts "ERROR: Reading prompt failed"
+	exit 1
+}
+
+# Should not get here.
+exit 2
